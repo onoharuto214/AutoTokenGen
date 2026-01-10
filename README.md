@@ -1,58 +1,64 @@
-
 # AutoTokenGen - Automatic ERC-20 Token Generator
 
-AutoTokenGen is a Python program that simplifies the process of creating and deploying ERC-20 tokens on Any EVM blockchain. With customizable parameters, you can effortlessly generate your own tokens for various use cases.
+AutoTokenGen is a modern Python CLI tool that simplifies the process of creating and deploying ERC-20 tokens on any EVM-compatible blockchain.
 
 ## Features
 
-- **Easy Customization:** Modify parameters such as token name, symbol, initial supply, and more to create a token tailored to your needs.
-
-- **Automatic Deployment:** The program automates the deployment process, saving you time and effort.
-
-- **Web3.py Integration:** Utilizes the Web3.py library for seamless interaction with the blockchain.
+- **CLI-Driven:** Easily specify token parameters via command-line arguments.
+- **Environment Support:** Securely manage private keys and RPC URLs using `.env` files.
+- **Modern Smart Contracts:** Uses Solidity 0.8.x for better security and efficiency.
+- **Automatic Deployment:** Handles compilation, gas estimation, and deployment in one go.
+- **Logging:** Detailed logging for every step of the deployment process.
 
 ## Getting Started
 
 ### Prerequisites
 
-Make sure you have the following installed:
+- Python 3.8+
+- [web3.py](https://web3py.readthedocs.io/)
+- [py-solc-x](https://github.com/crytic/py-solc-x)
+- [python-dotenv](https://github.com/theskumar/python-dotenv)
 
-- Python 3
-- [Web3.py](https://web3py.readthedocs.io/en/stable/)
-- py-solc-x
+### Installation
 
-### Usage
-
-1. Clone the repository to your local machine:
-
+1. Clone the repository:
    ```bash
    git clone https://github.com/rakibmia7254/AutoTokenGen.git
    cd AutoTokenGen
    ```
-   2.Customize the token parameters in the `main.py` file:
-   ```python
-   import  deploy
-   contract_deployer  =  deploy.ERC20Token(
-	   rpc_url="https://data-seed-prebsc-1-s3.binance.org:8545/",
-	   gasPrice=5,
-	   private_key="your_private_key",
-	   token_name='TestToken',
-	   symbol='Test',
-	   total_supply=10000000000,
-	   dec=18
-   )
-   print(contract_deployer.deploy_contract())```
 
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3.Run the program:
+3. Setup environment variables (recommended):
+   ```bash
+   cp .env.example .env
+   # Edit .env with your private key and RPC URL
+   ```
+
+### Usage
+
+You can deploy a token using either environment variables or CLI arguments.
+
+**Using CLI arguments:**
+```bash
+python main.py --rpc YOUR_RPC_URL --key YOUR_PRIVATE_KEY --name "MyToken" --symbol "MTK" --supply 1000000
+```
+
+**Using .env file:**
+If your `.env` is configured, simply run:
 ```bash
 python main.py
 ```
-it will print your deployed contract address
 
+### Security Warning
+> [!CAUTION]
+> Never share your private key or commit your `.env` file to a public repository. Ensure `.env` is listed in your `.gitignore`.
 
 ### License
-This project is licensed under the MIT License - see the LICENSE file for details
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 #### Author:
 1. Rakib Hossain
