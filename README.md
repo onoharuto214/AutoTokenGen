@@ -9,14 +9,15 @@ AutoTokenGen is a modern Python CLI tool that simplifies the process of creating
 - **Modern Smart Contracts:** Uses Solidity 0.8.x for better security and efficiency.
 - **Automatic Deployment:** Handles compilation, gas estimation, and deployment in one go.
 - **Logging:** Detailed logging for every step of the deployment process.
+- **Built with evmdeploy:** Leverages the `evmdeploy` library for clean, maintainable contract deployment.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.8+
+- [evmdeploy](https://github.com/rakibhossain72/evmdeploy) - Minimal Python library for EVM contract deployment
 - [web3.py](https://web3py.readthedocs.io/)
-- [py-solc-x](https://github.com/crytic/py-solc-x)
 - [python-dotenv](https://github.com/theskumar/python-dotenv)
 
 ### Installation

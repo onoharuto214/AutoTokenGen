@@ -1,8 +1,7 @@
-import os
-import time
 import logging
+from typing import Optional
 from web3 import Web3
-from solcx import compile_standard, install_solc
+from evmdeploy import compile_solidity, Contract
 from dotenv import load_dotenv
 
 # Initialize logging
@@ -12,40 +11,37 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Install solc version
-SOLC_VERSION = '0.8.0'
-try:
-    install_solc(SOLC_VERSION)
-except Exception as e:
-    logger.warning(f"Failed to install solc {SOLC_VERSION}: {e}")
-
-def compile_contract(contract_path, contract_name):
-    logger.info(f"Compiling contract {contract_path}...")
-    try:
-        with open(contract_path, 'r') as file:
-            contract_source = file.read()
-    except FileNotFoundError:
-        logger.error(f"Contract file not found at {contract_path}")
-        return None
-
-    compiled_sol = compile_standard(
-        {
-            "language": "Solidity",
-            "sources": {contract_name: {"content": contract_source}},
-            "settings": {
-                "outputSelection": {
-                    "*": {
-                        "*": ['abi', 'metadata', 'evm.bytecode', 'evm.sourceMap']
-                    }
-                }
-            }
-        },
-        solc_version=SOLC_VERSION
-    )
-    return compiled_sol
 
 class ERC20Token:
-    def __init__(self, rpc_url, private_key, token_name, symbol, dec=18, total_supply=0, gas_price_gwei=None):
+    """
+    ERC20 Token deployer using evmdeploy library.
+    Provides a simplified interface for compiling and deploying ERC20 tokens.
+    """
+    
+    def __init__(
+        self,
+        rpc_url: str,
+        private_key: str,
+        token_name: str,
+        symbol: str,
+        dec: int = 18,
+        total_supply: int = 0,
+        gas_price_gwei: Optional[float] = None,
+        solc_version: str = '0.8.0'
+    ):
+        """
+        Initialize the ERC20Token deployer.
+        
+        Args:
+            rpc_url: RPC URL of the blockchain
+            private_key: Private key for deployment
+            token_name: Name of the token
+            symbol: Token symbol
+            dec: Token decimals (default: 18)
+            total_supply: Total supply (unscaled)
+            gas_price_gwei: Optional gas price in Gwei
+            solc_version: Solidity compiler version (default: 0.8.0)
+        """
         self.contract_path = "./contracts/Token.sol"
         self.rpc_url = rpc_url
         self.private_key = private_key
@@ -54,62 +50,84 @@ class ERC20Token:
         self.dec = int(dec)
         self.total_supply = int(total_supply)
         self.gas_price_gwei = gas_price_gwei
+        self.solc_version = solc_version
         
+        # Initialize Web3 connection
         self.w3 = Web3(Web3.HTTPProvider(self.rpc_url))
         if not self.w3.is_connected():
             raise ConnectionError(f"Failed to connect to RPC at {self.rpc_url}")
-
-    def deploy_contract(self):
+        
+        # Compile contract
+        self.contract = None
+        self._compile_contract()
+    
+    def _compile_contract(self):
+        """Compile the Token.sol contract using evmdeploy."""
+        logger.info(f"Compiling contract {self.contract_path}...")
+        
+        try:
+            artifacts = compile_solidity(
+                path=self.contract_path,
+                solc_version=self.solc_version,
+                optimizer=True,
+                runs=200
+            )
+            
+            # Get the Token contract artifact
+            if "Token" not in artifacts:
+                raise ValueError("Token contract not found in compiled artifacts")
+            
+            self.contract = Contract(artifacts["Token"])
+            logger.info("Contract compiled successfully")
+            
+        except FileNotFoundError:
+            logger.error(f"Contract file not found at {self.contract_path}")
+            raise
+        except Exception as e:
+            logger.error(f"Compilation failed: {e}")
+            raise
+    
+    def deploy_contract(self) -> Optional[str]:
+        """
+        Deploy the ERC20 token contract.
+        
+        Returns:
+            Contract address if successful, None otherwise
+        """
         logger.info(f"Starting deployment for {self.token_name} ({self.symbol})...")
         
-        data = compile_contract(self.contract_path, "Token.sol")
-        if not data:
+        if not self.contract:
+            logger.error("Contract not compiled")
             return None
-
-        abi = data["contracts"]["Token.sol"]["Token"]["abi"]
-        bytecode = data["contracts"]["Token.sol"]["Token"]["evm"]["bytecode"]["object"]
         
-        contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-
-        account = self.w3.eth.account.from_key(self.private_key)
-        address = account.address
-
-        logger.info(f"Deploying from address: {address}")
-
         try:
-            # Estimate gas
-            constructor_txn = contract.constructor(self.token_name, self.symbol, self.dec, self.total_supply)
-            gas_estimate = constructor_txn.estimate_gas({'from': address})
+            # Prepare constructor arguments
+            constructor_args = [
+                self.token_name,
+                self.symbol,
+                self.dec,
+                self.total_supply
+            ]
             
-            # Prepare transaction
-            gas_price = self.w3.to_wei(self.gas_price_gwei, 'gwei') if self.gas_price_gwei else self.w3.eth.gas_price
+            logger.info(f"Deploying from address: {self.w3.eth.account.from_key(self.private_key).address}")
             
-            transaction = constructor_txn.build_transaction({
-                'from': address,
-                'gas': int(gas_estimate * 1.1),  # Add 10% buffer
-                'gasPrice': gas_price,
-                'nonce': self.w3.eth.get_transaction_count(address),
-                'chainId': self.w3.eth.chain_id
-            })
-
-            # Sign and send
-            signed_txn = self.w3.eth.account.sign_transaction(transaction, self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+            # Deploy using evmdeploy Contract.deploy()
+            # This handles gas estimation, transaction signing, and receipt waiting
+            result = self.contract.deploy(
+                w3=self.w3,
+                private_key=self.private_key,
+                constructor_args=constructor_args,
+                wait=True
+            )
             
-            logger.info(f"Transaction sent. Hash: {tx_hash.hex()}")
-            logger.info("Waiting for confirmation...")
-
-            # Wait for receipt
-            tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
-            
-            if tx_receipt['status'] == 1:
-                logger.info(f"Contract deployed successfully at: {tx_receipt['contractAddress']}")
-                return tx_receipt['contractAddress']
+            if result.contract_address:
+                logger.info(f"Contract deployed successfully at: {result.contract_address}")
+                logger.info(f"Transaction Hash: {result.tx_hash}")
+                return result.contract_address
             else:
-                logger.error("Transaction failed!")
+                logger.error("Deployment failed - no contract address returned")
                 return None
-
+                
         except Exception as e:
             logger.error(f"Deployment failed: {e}")
             return None
-
